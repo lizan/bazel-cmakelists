@@ -62,7 +62,7 @@ def ConvertExternalPath(fn):
   return GetBasePath(fn)
 
 def ExtractSources():
-  query = 'kind("source file", deps(%s))' % FLAGS.target
+  query = 'kind("source file", deps(kind("cc_.* rule", deps(%s))))' % FLAGS.target
   sources = []
   for fn in subprocess.check_output(['bazel', 'query', query]).splitlines():
     fn = ConvertExternalPath(fn)
@@ -71,7 +71,7 @@ def ExtractSources():
   return sources
 
 def ExtractGenerated():
-  query = 'kind("generated file", deps(%s))' % FLAGS.target
+  query = 'kind("generated file", deps(kind("cc_.* rule", deps(%s))))' % FLAGS.target
   sources = []
   for fn in subprocess.check_output(['bazel', 'query', query]).splitlines():
     fn = ConvertGeneratedPath(fn)
