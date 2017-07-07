@@ -35,8 +35,6 @@ flags.DEFINE_string('target', '//src/...',
 
 flags.DEFINE_boolean('open', False, ('Open CLion after generation, only supports Mac'))
 
-flags.DEFINE_boolean('mac_debug', False, ('Generate project to use with debugger on Mac'))
-
 EXTERNAL_PATTERN = re.compile("^@(.*)\\/\\/")
 SOURCE_EXTENSION = set([".h", ".hpp", ".c", ".cc", ".cpp", ".cxx"])
 
@@ -49,15 +47,12 @@ def GetBasePath(fn):
 
 def ConvertGeneratedPath(fn):
   bazel_root = 'bazel-' + FLAGS.project
-  if FLAGS.mac_debug:
-    genfiles_root = path.join('bazel-out', 'local-dbg', 'genfiles')
-  if not FLAGS.mac_debug:
-    genfiles_root = 'bazel-genfiles'
+  genfiles_root = 'bazel-genfiles'
   return path.join(genfiles_root, GetBasePath(fn))
 
 def ConvertExternalPath(fn):
   bazel_root = 'bazel-' + FLAGS.project
-  if not FLAGS.mac_debug and EXTERNAL_PATTERN.match(fn):
+  if EXTERNAL_PATTERN.match(fn):
     return path.join(bazel_root, GetBasePath(fn))
   return GetBasePath(fn)
 
@@ -147,10 +142,7 @@ def GenerateCMakeList():
       defines.append(opt[2:])
 
   output = FLAGS.output
-  if FLAGS.mac_debug:
-    file_root = subprocess.check_output(['bazel', 'info', 'execution_root']).strip()
-  else:
-    file_root = subprocess.check_output(['bazel', 'info', 'workspace']).strip()
+  file_root = subprocess.check_output(['bazel', 'info', 'workspace']).strip()
   output = path.join(file_root, FLAGS.output)
   try:
     os.remove(output)
@@ -168,10 +160,7 @@ def GenerateCMakeList():
     cmakelist.write(")\n\n")
     cmakelist.write("set(INCLUDE_DIRECTORIES\n    ")
     cmakelist.write("\n    ".join(includes))
-    if FLAGS.mac_debug:
-      cmakelist.write("\n    bazel-out/local-dbg/genfiles")
-    else:
-      cmakelist.write("\n    bazel-genfiles")
+    cmakelist.write("\n    bazel-genfiles")
     cmakelist.write("\n    .)\n\n")
     if len(defines) > 0:
       cmakelist.write("add_definitions(\n    -D")
