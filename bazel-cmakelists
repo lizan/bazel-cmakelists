@@ -40,6 +40,14 @@ flags.DEFINE_boolean('mac_debug', False, ('Generate project to use with debugger
 EXTERNAL_PATTERN = re.compile("^@(.*)\\/\\/")
 SOURCE_EXTENSION = set([".h", ".hpp", ".c", ".cc", ".cpp", ".cxx"])
 
+def Exists(fn):
+  try:
+    os.stat(fn)
+    return True
+  except OSError:
+    sys.stderr.write("Skipping %s ...\n" % fn)
+    return False
+
 def GetBasePath(fn):
   fn = fn.replace('/:', '/')
   fn = fn.replace(':', '/')
@@ -68,7 +76,7 @@ def ExtractSources():
     fn = ConvertExternalPath(fn)
     if path.splitext(fn)[1] in SOURCE_EXTENSION:
       sources.append(fn)
-  return sources
+  return [source for source in sources if Exists(source)]
 
 def ExtractGenerated():
   query = 'kind("generated file", deps(kind("cc_.* rule", deps(%s))))' % FLAGS.target
@@ -77,7 +85,7 @@ def ExtractGenerated():
     fn = ConvertGeneratedPath(fn)
     if path.splitext(fn)[1] in SOURCE_EXTENSION:
       sources.append(fn)
-  return sources
+  return [source for source in sources if Exists(source)]
 
 def ExtractIncludes():
   query = 'kind(cc_library, deps(%s))' % FLAGS.target
