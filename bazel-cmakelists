@@ -116,7 +116,13 @@ def ExtractIncludes():
       if inc not in includes:
         includes.append(inc)
 
-  return includes
+  for d in os.listdir('bazel-%s/external' % FLAGS.project):
+    if os.path.isdir('bazel-%s/external/%s' % (FLAGS.project, d)):
+      includes.append('bazel-%s/external/%s' % (FLAGS.project, d))
+    if os.path.isdir('bazel-genfiles/external/%s' % d):
+      includes.append('bazel-genfiles/external/%s' % d)
+
+  return set(includes)
 
 def ExtractDefines():
   query = 'attr("defines", "", deps(%s))' % FLAGS.target
@@ -125,7 +131,7 @@ def ExtractDefines():
   defines = []
   for e in tree.findall(".//list[@name='defines']/string"):
     defines.append(e.attrib['value'])
-  return defines
+  return set(defines)
 
 def ExtractCopts():
   query = 'attr("copts", "", deps(%s))' % FLAGS.target
@@ -134,7 +140,7 @@ def ExtractCopts():
   copts = []
   for e in tree.findall(".//list[@name='copts']/string"):
     copts.append(e.attrib['value'])
-  return copts
+  return set(copts)
 
 def GenerateCMakeList():
   bazel_args = ['build']
@@ -148,11 +154,11 @@ def GenerateCMakeList():
   copts = ExtractCopts()
   for opt in copts:
     if opt.startswith("-I-"):
-      includes.append(opt[3:])
+      includes.add(opt[3:])
     elif opt.startswith("-I"):
-      includes.append(opt[2:])
+      includes.add(opt[2:])
     elif opt.startswith("-D"):
-      defines.append(opt[2:])
+      defines.add(opt[2:])
 
   output = FLAGS.output
   if FLAGS.mac_debug:
@@ -167,7 +173,7 @@ def GenerateCMakeList():
   with open(output, 'w') as cmakelist:
     cmakelist.write("cmake_minimum_required(VERSION 3.3)\n")
     cmakelist.write("project(%s)\n\n" % FLAGS.project)
-    cmakelist.write("set(CMAKE_CXX_FLAGS \"${CMAKE_CXX_FLAGS} -std=c++11\")\n\n")
+    cmakelist.write("set(CMAKE_CXX_FLAGS \"${CMAKE_CXX_FLAGS} -std=c++14\")\n\n")
     cmakelist.write("set(SOURCE_FILES\n    ")
     cmakelist.write("\n    ".join(sources))
     cmakelist.write(")\n\n")
