@@ -70,7 +70,7 @@ def ConvertExternalPath(fn):
   return GetBasePath(fn)
 
 def ExtractSources():
-  query = 'kind("source file", deps(kind("cc_.* rule", deps(%s))))' % FLAGS.target
+  query = 'kind("source file", deps(kind("cc_.* rule", deps(kind("cc_.* rule", %s)))))' % FLAGS.target
   sources = []
   for fn in subprocess.check_output(['bazel', 'query', query]).splitlines():
     fn = ConvertExternalPath(fn)
@@ -79,7 +79,7 @@ def ExtractSources():
   return [source for source in sources if Exists(source)]
 
 def ExtractGenerated():
-  query = 'kind("generated file", deps(kind("cc_.* rule", deps(%s))))' % FLAGS.target
+  query = 'kind("generated file", deps(kind("cc_.* rule", deps(kind("cc_.* rule", %s)))))' % FLAGS.target
   sources = []
   for fn in subprocess.check_output(['bazel', 'query', query]).splitlines():
     fn = ConvertGeneratedPath(fn)
@@ -88,7 +88,7 @@ def ExtractGenerated():
   return [source for source in sources if Exists(source)]
 
 def ExtractIncludes():
-  query = 'kind(cc_library, deps(%s))' % FLAGS.target
+  query = 'kind(cc_library, deps(kind("cc_.* rule", %s)))' % FLAGS.target
   includes = []
   xml = subprocess.check_output(['bazel', 'query', query, '--output', 'xml'])
   tree = ET.fromstring(xml)
@@ -125,7 +125,7 @@ def ExtractIncludes():
   return set(includes)
 
 def ExtractDefines():
-  query = 'attr("defines", "", deps(%s))' % FLAGS.target
+  query = 'attr("defines", "", deps(kind("cc_.* rule", %s)))' % FLAGS.target
   xml = subprocess.check_output(['bazel', 'query', query, '--output', 'xml'])
   tree = ET.fromstring(xml)
   defines = []
@@ -134,7 +134,7 @@ def ExtractDefines():
   return set(defines)
 
 def ExtractCopts():
-  query = 'attr("copts", "", deps(%s))' % FLAGS.target
+  query = 'attr("copts", "", deps(kind("cc_.* rule", %s)))' % FLAGS.target
   xml = subprocess.check_output(['bazel', 'query', query, '--output', 'xml'])
   tree = ET.fromstring(xml)
   copts = []
