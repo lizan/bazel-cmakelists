@@ -37,6 +37,9 @@ flags.DEFINE_boolean('open', False, ('Open CLion after generation, only supports
 
 flags.DEFINE_boolean('mac_debug', False, ('Generate project to use with debugger on Mac'))
 
+flags.DEFINE_boolean('genfiles', False, ('Generate project with genfiles'))
+flags.DEFINE_boolean('external', False, ('Generate project with external'))
+
 EXTERNAL_PATTERN = re.compile("^@(.*)\\/\\/")
 SOURCE_EXTENSION = set([".h", ".hpp", ".c", ".cc", ".cpp", ".cxx"])
 
@@ -61,19 +64,21 @@ def ConvertGeneratedPath(fn):
     genfiles_root = path.join('bazel-out', 'local-dbg', 'genfiles')
   if not FLAGS.mac_debug:
     genfiles_root = 'bazel-genfiles'
-  return path.join(genfiles_root, GetBasePath(fn))
+  return path.realpath(path.join(genfiles_root, GetBasePath(fn)))
 
 def ConvertExternalPath(fn):
   bazel_root = 'bazel-' + FLAGS.project
   if not FLAGS.mac_debug and EXTERNAL_PATTERN.match(fn):
     return path.join(bazel_root, GetBasePath(fn))
-  return GetBasePath(fn)
+  return path.realpath(GetBasePath(fn))
 
 def ExtractSources():
   query = 'kind("source file", deps(kind("cc_.* rule", deps(kind("cc_.* rule", %s)))))' % FLAGS.target
   sources = []
   for fn in subprocess.check_output(['bazel', 'query', query]).splitlines():
-    fn = ConvertExternalPath(fn)
+    if (not FLAGS.external) and EXTERNAL_PATTERN.match(fn):
+      continue
+    fn = GetBasePath(fn)
     if path.splitext(fn)[1] in SOURCE_EXTENSION:
       sources.append(fn)
   return [source for source in sources if Exists(source)]
@@ -95,32 +100,29 @@ def ExtractIncludes():
   for e in tree.findall(".//list[@name='includes']/.."):
     prefix = e.attrib['name'].split(':')[0]
     for val in [i.attrib['value'] for i in e.findall("list[@name='includes']/string")] + ["."]:
-      geninc = path.normpath(path.join(ConvertGeneratedPath(prefix), val))
-      if geninc not in includes:
-        includes.append(geninc)
-      inc = path.normpath(path.join(ConvertExternalPath(prefix), val))
-      if inc not in includes:
-        includes.append(inc)
+      geninc = path.realpath(path.join(ConvertGeneratedPath(prefix), val))
+      includes.append(geninc)
+
+      inc = path.realpath(path.join(ConvertExternalPath(prefix), val))
+      includes.append(inc)
 
   for e in tree.findall(".//string[@name='include_prefix']/.."):
     prefix = e.attrib['name'].split(':')[0]
     include_prefix = e.find("string[@name='include_prefix']").attrib['value']
-    geninc = path.normpath(path.join(ConvertGeneratedPath(prefix), val))
+    geninc = path.realpath(path.join(ConvertGeneratedPath(prefix), val))
     if geninc.endswith(include_prefix):
       geninc = geninc[:-len(include_prefix)]
-      if geninc not in includes:
-        includes.append(geninc)
-    inc = path.normpath(path.join(ConvertExternalPath(prefix), val))
+      includes.append(geninc)
+    inc = path.realpath(path.join(ConvertExternalPath(prefix), val))
     if inc.endswith(include_prefix):
       inc = inc[:-len(include_prefix)]
-      if inc not in includes:
-        includes.append(inc)
+      includes.append(inc)
 
   for d in os.listdir('bazel-%s/external' % FLAGS.project):
     if os.path.isdir('bazel-%s/external/%s' % (FLAGS.project, d)):
-      includes.append('bazel-%s/external/%s' % (FLAGS.project, d))
+      includes.append(path.realpath('bazel-%s/external/%s' % (FLAGS.project, d)))
     if os.path.isdir('bazel-genfiles/external/%s' % d):
-      includes.append('bazel-genfiles/external/%s' % d)
+      includes.append(path.realpath('bazel-genfiles/external/%s' % d))
 
   return set(includes)
 
@@ -178,15 +180,16 @@ def GenerateCMakeList():
     cmakelist.write("\n    ".join(sources))
     cmakelist.write(")\n\n")
     cmakelist.write("set(GENERATED_SOURCES\n    ")
-    cmakelist.write("\n    ".join(generated))
+    if FLAGS.genfiles:
+      cmakelist.write("\n    ".join(generated))
     cmakelist.write(")\n\n")
     cmakelist.write("set(INCLUDE_DIRECTORIES\n    ")
     cmakelist.write("\n    ".join(includes))
     if FLAGS.mac_debug:
       cmakelist.write("\n    bazel-out/local-dbg/genfiles")
     else:
-      cmakelist.write("\n    bazel-genfiles")
-    cmakelist.write("\n    .)\n\n")
+      cmakelist.write("\n    %s" % path.realpath("bazel-genfiles"))
+    cmakelist.write("\n    %s)\n\n" % path.realpath("."))
     if len(defines) > 0:
       cmakelist.write("add_definitions(\n    -D")
       cmakelist.write("\n    -D".join(defines))
