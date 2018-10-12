@@ -5,13 +5,13 @@ The workaround script to generate a `CMakeLists.txt` from [Bazel](https://bazel.
 ## Usage
 
 ```
-bazel-cmakelists --target <bazel-target>
+bazel-cmakelists --targets <bazel-target>
 ```
 
 e.g.
 
 ```
-bazel-cmakelists --target //test/...
+bazel-cmakelists --targets //test/...
 ```
 
 - Do not use generated `CMakeLists.txt` to build, use bazel.
@@ -20,5 +20,4 @@ bazel-cmakelists --target //test/...
 
 ## Requirements
 - Python 2.7
-- Bazel 0.4.5
-- gflags (`apt-get install python-gflags`)
+- Bazel 0.17+
