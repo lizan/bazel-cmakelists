@@ -24,6 +24,9 @@ import sys
 EXTERNAL_PATTERN = re.compile("^@(.*)\\/\\/")
 SOURCE_EXTENSION = set([".h", ".hpp", ".hh", ".hxx", ".c", ".cc", ".cpp", ".cxx"])
 
+def QueryTargets():
+  return ' union '.join(FLAGS.targets)
+
 def Exists(fn):
   try:
     os.stat(fn)
@@ -54,9 +57,9 @@ def ConvertExternalPath(fn):
   return path.realpath(GetBasePath(fn))
 
 def ExtractSources():
-  query = 'kind("source file", deps(kind("cc_.* rule", deps(kind("cc_.* rule", %s)))))' % ' '.join(FLAGS.targets)
+  query = 'kind("source file", deps(kind("cc_.* rule", deps(kind("cc_.* rule", %s)))))' % QueryTargets()
   sources = []
-  for fn in subprocess.check_output(['bazel', 'query', query]).splitlines():
+  for fn in subprocess.check_output(['bazel', 'query', '--noimplicit_deps', query]).splitlines():
     if (not FLAGS.external) and EXTERNAL_PATTERN.match(fn):
       continue
     fn = GetBasePath(fn)
@@ -65,18 +68,18 @@ def ExtractSources():
   return [source for source in sources if Exists(source)]
 
 def ExtractGenerated():
-  query = 'kind("generated file", deps(kind("cc_.* rule", deps(kind("cc_.* rule", %s)))))' % ' '.join(FLAGS.targets)
+  query = 'kind("generated file", deps(kind("cc_.* rule", deps(kind("cc_.* rule", %s)))))' % QueryTargets()
   sources = []
-  for fn in subprocess.check_output(['bazel', 'query', query]).splitlines():
+  for fn in subprocess.check_output(['bazel', 'query', '--noimplicit_deps', query]).splitlines():
     fn = ConvertGeneratedPath(fn)
     if path.splitext(fn)[1] in SOURCE_EXTENSION:
       sources.append(fn)
   return [source for source in sources if Exists(source)]
 
 def ExtractIncludes():
-  query = 'kind(cc_library, deps(kind("cc_.* rule", %s)))' % ' '.join(FLAGS.targets)
+  query = 'kind(cc_library, deps(kind("cc_.* rule", %s)))' % QueryTargets()
   includes = []
-  xml = subprocess.check_output(['bazel', 'query', query, '--output', 'xml'])
+  xml = subprocess.check_output(['bazel', 'query', '--noimplicit_deps', query, '--output', 'xml'])
   tree = ET.fromstring(xml)
   for e in tree.findall(".//list[@name='includes']/.."):
     prefix = e.attrib['name'].split(':')[0]
@@ -108,8 +111,8 @@ def ExtractIncludes():
   return set(includes)
 
 def ExtractDefines():
-  query = 'attr("defines", "", deps(kind("cc_.* rule", %s)))' % ' '.join(FLAGS.targets)
-  xml = subprocess.check_output(['bazel', 'query', query, '--output', 'xml'])
+  query = 'attr("defines", "", deps(kind("cc_.* rule", %s)))' % QueryTargets()
+  xml = subprocess.check_output(['bazel', 'query', '--noimplicit_deps', query, '--output', 'xml'])
   tree = ET.fromstring(xml)
   defines = []
   for e in tree.findall(".//list[@name='defines']/string"):
@@ -117,8 +120,8 @@ def ExtractDefines():
   return set(defines)
 
 def ExtractCopts():
-  query = 'attr("copts", "", deps(kind("cc_.* rule", %s)))' % ' '.join(FLAGS.targets)
-  xml = subprocess.check_output(['bazel', 'query', query, '--output', 'xml'])
+  query = 'attr("copts", "", deps(kind("cc_.* rule", %s)))' % QueryTargets()
+  xml = subprocess.check_output(['bazel', 'query', '--noimplicit_deps', query, '--output', 'xml'])
   tree = ET.fromstring(xml)
   copts = []
   for e in tree.findall(".//list[@name='copts']/string"):
