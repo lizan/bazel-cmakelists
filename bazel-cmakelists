@@ -141,6 +141,7 @@ def GenerateCMakeList():
   if not FLAGS.skip_build:
     bazel_args = ['build']
     bazel_args.extend(FLAGS.targets)
+    bazel_args.extend(FLAGS.bazel_args[1:])
     run_bazel(bazel_args)
 
   sources = ExtractSources()
@@ -210,7 +211,7 @@ if __name__ == "__main__":
   parser.add_argument('--genfiles', action='store_true', help='Generate project with genfiles')
   parser.add_argument('--external', action='store_true', help='Generate project with external')
   parser.add_argument('--output', default="CMakeLists.txt")
-
+  parser.add_argument('bazel_args', nargs=argparse.REMAINDER)
   FLAGS = parser.parse_args()
 
   if FLAGS.project is None:
