@@ -56,10 +56,19 @@ def ConvertExternalPath(fn):
     return path.join(bazel_root, GetBasePath(fn))
   return path.realpath(GetBasePath(fn))
 
+def run_bazel(args):
+  sa = os.getenv("BAZEL_STARTUP_ARGS")
+  if sa is not None:
+    args = sa.split() + args
+
+  args = ['bazel'] + args
+  print args
+  return subprocess.check_output(args)
+
 def ExtractSources():
   query = 'kind("source file", deps(kind("cc_.* rule", deps(kind("cc_.* rule", %s)))))' % QueryTargets()
   sources = []
-  for fn in subprocess.check_output(['bazel', 'query', '--noimplicit_deps', query]).splitlines():
+  for fn in run_bazel(['query', '--noimplicit_deps', query]).splitlines():
     if (not FLAGS.external) and EXTERNAL_PATTERN.match(fn):
       continue
     fn = GetBasePath(fn)
@@ -70,7 +79,7 @@ def ExtractSources():
 def ExtractGenerated():
   query = 'kind("generated file", deps(kind("cc_.* rule", deps(kind("cc_.* rule", %s)))))' % QueryTargets()
   sources = []
-  for fn in subprocess.check_output(['bazel', 'query', '--noimplicit_deps', query]).splitlines():
+  for fn in run_bazel(['query', '--noimplicit_deps', query]).splitlines():
     fn = ConvertGeneratedPath(fn)
     if path.splitext(fn)[1] in SOURCE_EXTENSION:
       sources.append(fn)
@@ -79,7 +88,7 @@ def ExtractGenerated():
 def ExtractIncludes():
   query = 'kind(cc_library, deps(kind("cc_.* rule", %s)))' % QueryTargets()
   includes = []
-  xml = subprocess.check_output(['bazel', 'query', '--noimplicit_deps', query, '--output', 'xml'])
+  xml = run_bazel(['query', '--noimplicit_deps', query, '--output', 'xml'])
   tree = ET.fromstring(xml)
   for e in tree.findall(".//list[@name='includes']/.."):
     prefix = e.attrib['name'].split(':')[0]
@@ -112,7 +121,7 @@ def ExtractIncludes():
 
 def ExtractDefines():
   query = 'attr("defines", "", deps(kind("cc_.* rule", %s)))' % QueryTargets()
-  xml = subprocess.check_output(['bazel', 'query', '--noimplicit_deps', query, '--output', 'xml'])
+  xml = run_bazel(['query', '--noimplicit_deps', query, '--output', 'xml'])
   tree = ET.fromstring(xml)
   defines = []
   for e in tree.findall(".//list[@name='defines']/string"):
@@ -121,7 +130,7 @@ def ExtractDefines():
 
 def ExtractCopts():
   query = 'attr("copts", "", deps(kind("cc_.* rule", %s)))' % QueryTargets()
-  xml = subprocess.check_output(['bazel', 'query', '--noimplicit_deps', query, '--output', 'xml'])
+  xml = run_bazel(['query', '--noimplicit_deps', query, '--output', 'xml'])
   tree = ET.fromstring(xml)
   copts = []
   for e in tree.findall(".//list[@name='copts']/string"):
@@ -129,9 +138,11 @@ def ExtractCopts():
   return set(copts)
 
 def GenerateCMakeList():
-  bazel_args = ['build']
-  bazel_args.extend(FLAGS.targets)
-  subprocess.check_output(['bazel'] + bazel_args)
+  if not FLAGS.skip_build:
+    bazel_args = ['build']
+    bazel_args.extend(FLAGS.targets)
+    run_bazel(bazel_args)
+
   sources = ExtractSources()
   generated = ExtractGenerated()
   includes = ExtractIncludes()
@@ -147,9 +158,9 @@ def GenerateCMakeList():
 
   output = FLAGS.output
   if FLAGS.mac_debug:
-    file_root = subprocess.check_output(['bazel', 'info', 'execution_root']).strip()
+    file_root = run_bazel(['info', 'execution_root']).strip()
   else:
-    file_root = subprocess.check_output(['bazel', 'info', 'workspace']).strip()
+    file_root = run_bazel(['info', 'workspace']).strip()
   output = path.join(file_root, FLAGS.output)
   try:
     os.remove(output)
@@ -191,14 +202,19 @@ def GenerateCMakeList():
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser(description="Generate CMakeLists.txt for IDEs from bazel targets")
-  parser.add_argument('--project', default=subprocess.check_output("basename $(bazel info workspace)", shell=True).strip())
+  parser.add_argument('--project')
   parser.add_argument('--targets', default=['//...'], nargs='+')
   parser.add_argument('--open', action='store_true')
   parser.add_argument('--mac_debug', action='store_true')
+  parser.add_argument('--skip_build', action='store_true', help="Skip build step if you have aleady built target(s)")
   parser.add_argument('--genfiles', action='store_true', help='Generate project with genfiles')
   parser.add_argument('--external', action='store_true', help='Generate project with external')
   parser.add_argument('--output', default="CMakeLists.txt")
 
   FLAGS = parser.parse_args()
+
+  if FLAGS.project is None:
+      prj = run_bazel(['info', 'workspace']).strip()
+      FLAGS.project = os.path.basename(prj)
 
   GenerateCMakeList()
